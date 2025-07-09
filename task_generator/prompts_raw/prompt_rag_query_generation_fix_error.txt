@@ -6,12 +6,15 @@ Here is the error message:
 Here is the Manim code that caused the error:
 {code}
 
-Based on the error and code, generate multiple human-like queries (maximum 10) for retrieving relevant documentation. Please ensure that the search targets are different so that the RAG can retrieve a diverse set of documents covering various aspects of the implementation.
+Based on the error message and the surrounding code, generate multiple targeted search queries (maximum 5-7) for retrieving relevant Manim documentation. The goal is to find specific solutions or explanations for the error.
 
 **Specifically, ensure that:**
-1.  At least some queries are focused on retrieving information about **Manim function usage** in scenes. Frame these queries to target function definitions, usage examples, and parameter details within Manim documentation.
-2.  If the error suggests using plugin functionality, include at least 1 query specifically targeting **plugin documentation**.  Clearly mention the plugin name in these queries to focus the search.
-3.  Queries should be specific enough to distinguish between core Manim and plugin functionality when relevant, and to target the most helpful sections of the documentation (API reference, tutorials, examples).
+1.  Queries directly incorporate **key terms from the error message** (e.g., the error type like "NameError", "AttributeError", and specific problematic names or attributes mentioned).
+2.  Queries include the **Manim Mobject/class name** that is primarily involved in the error line (e.g., "Circle", "Square", "Text", "Transform").
+3.  Queries are phrased to find **examples, API documentation, or explanations** related to the error and the Mobject. For example, "Manim Circle NameError example" or "Manim Square attribute 'color' documentation".
+4.  If the error suggests using plugin functionality, include at least 1 query specifically targeting **plugin documentation**. Clearly mention the plugin name in these queries to focus the search.
+5.  Aim for a diverse set of queries if multiple aspects of the error or code seem relevant.
+6.  Prioritize queries that are likely to find solutions or explanations in official Manim documentation or well-regarded community resources.
 
 The above error and code are relevant to these plugins: {relevant_plugins}.
 Note that you MUST NOT use the plugins that are not listed above.
