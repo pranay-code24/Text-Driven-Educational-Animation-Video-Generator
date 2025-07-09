@@ -587,6 +587,10 @@ class AppwriteVideoManager:
             }
             
             if error_message:
+                if not isinstance(error_message, str):
+                    error_message = str(error_message)
+                if len(error_message) > 990: # Max 1000, leave space for ellipsis
+                    error_message = error_message[:990] + "... (truncated)"
                 update_data["error_message"] = error_message
             if combined_video_url:
                 update_data["combined_video_url"] = combined_video_url
@@ -773,6 +777,10 @@ class AppwriteVideoManager:
             if duration:
                 update_data["duration"] = duration
             if error_message:
+                if not isinstance(error_message, str):
+                    error_message = str(error_message)
+                if len(error_message) > 990: # Max 1000, leave space for ellipsis
+                    error_message = error_message[:990] + "... (truncated)"
                 update_data["error_message"] = error_message
             
             self.databases.update_document(
