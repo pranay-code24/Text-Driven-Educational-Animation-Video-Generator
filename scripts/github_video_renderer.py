@@ -9,6 +9,10 @@ import sys
 import json
 import asyncio
 from typing import List, Optional
+import warnings
+
+# Suppress pkg_resources warning from manim_voiceover
+warnings.filterwarnings("ignore", category=UserWarning, module="manim_voiceover.__init__")
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

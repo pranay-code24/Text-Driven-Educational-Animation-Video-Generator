@@ -321,10 +321,34 @@ class CodeGenerator:
         for attempt in range(max_retries):
             code_match = re.search(pattern, response_text, re.DOTALL)
             if code_match:
-                return code_match.group(1)
+                extracted_code = code_match.group(1).strip()
+
+                # Refined cleanup for internal backticks:
+                # Remove lines that are exactly '```' or '```python' if they appear internally.
+                # This is safer than just counting, but might still be imperfect for very complex cases.
+                lines = extracted_code.split('\n')
+                cleaned_lines = []
+                for line in lines:
+                    stripped_line = line.strip()
+                    if stripped_line == "```" or stripped_line == "```python":
+                        # Potentially problematic internal backtick line, skip it
+                        print(f"Notice: Removing suspicious internal backtick line: '{line}'")
+                        continue
+                    cleaned_lines.append(line)
+                extracted_code = "\n".join(cleaned_lines)
+
+                # Basic Python syntax validation
+                try:
+                    import ast
+                    ast.parse(extracted_code)
+                    return extracted_code  # Return successfully parsed code
+                except SyntaxError as e:
+                    print(f"Attempt {attempt + 1}: Extracted code has syntax error after cleanup: {e}.")
+                    print(f"Problematic code after cleanup:\n---\n{extracted_code}\n---")
+                    # Fall through to retry logic, the LLM will get the original response_text
             
             if attempt < max_retries - 1:
-                print(f"Attempt {attempt + 1}: Failed to extract code pattern. Retrying...")
+                print(f"Attempt {attempt + 1}: Failed to extract valid Python code from response. Retrying with LLM...")
                 # Regenerate response with a more explicit prompt
                 response_text = self.scene_model(
                     _prepare_text_inputs(retry_prompt.format(pattern=pattern, response_text=response_text)),
@@ -334,8 +358,11 @@ class CodeGenerator:
                         "session_id": session_id
                     }
                 )
-        
-        raise ValueError(f"Failed to extract code pattern after {max_retries} attempts. Pattern: {pattern}")
+            else: # Last attempt failed
+                print(f"Final attempt {attempt + 1}: Failed to extract valid code. Original response:\n{response_text}")
+
+
+        raise ValueError(f"Failed to extract valid Python code after {max_retries} attempts. Pattern: {pattern}")
 
     def generate_manim_code(self,
                             topic: str,
@@ -664,15 +691,35 @@ class CodeGenerator:
                 print(f"⚠️ Memvid RAG error fixing search failed: {e}")
                 # Continue without memvid results
 
+        # Add specific hints for common Manim Code object errors
+        if "TypeError" in error and "Mobject.__getattr__" in error and "get_code_lines" in code:
+            manim_code_hint = (
+                "\n# Hint for Manim Code object line access:\n"
+                "# Lines of a Manim 'Code' object are often accessed as sub-mobjects.\n"
+                "# If 'code_block' is a Manim 'Code' object, try accessing lines like:\n"
+                "#   `specific_lines = code_block.code[start_index:end_index]` (for a VGroup of lines)\n"
+                "#   `single_line = code_block.code[index]`\n"
+                "# Or, if `code_block` has a specific method or attribute for lines, ensure it's used correctly.\n"
+                "# The error 'getter() takes 1 positional argument but X were given' often means\n"
+                "# a method was called with multiple arguments `obj.method(a,b)` instead of `obj.method(slice(a,b))`\n"
+                "# or `obj.method([a,b])`, or it's an attribute being incorrectly called as a method.\n"
+                "# Ensure `get_code_lines` is a method and is called with the correct argument type (e.g., a slice or a list).\n"
+            )
+            if context:
+                context += manim_code_hint
+            else:
+                context = manim_code_hint
+            print("💡 Added specific hint for Manim Code object line access.")
+
         # Generate fixed code using LLM with context
         prompt = get_prompt_fix_error(error, code, context)
-        fixed_code = self.scene_model(
+        fixed_code_response_text = self.scene_model( # Renamed to avoid conflict
             _prepare_text_inputs(prompt),
             metadata={"generation_name": "fix-error", "trace_id": scene_trace_id, "tags": [topic, f"scene{scene_number}"], "session_id": session_id}
         )
 
         fixed_code = self._extract_code_with_retries(
-            fixed_code, 
+            fixed_code_response_text, # Use the new variable name
             pattern=r'```python\n(.*?)\n```',
             generation_name="fix-error",
             trace_id=scene_trace_id,
