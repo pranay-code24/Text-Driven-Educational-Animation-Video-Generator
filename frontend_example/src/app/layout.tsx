@@ -11,20 +11,20 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'ManimGen | AI-Powered Educational Animations',
+  title: 'ApniDisha | AI-Powered Educational Animations',
   description: 'Transform your ideas into stunning educational animations. Create professional Manim videos with automatic scene generation, voice-over, and real-time progress tracking.',
   keywords: 'manim, video generation, AI, educational animations, mathematics, physics, programming',
   authors: [{ name: 'Manim Animation Agent' }],
   robots: 'index, follow',
   openGraph: {
-    title: 'ManimGen | AI-Powered Educational Animations',
+    title: 'ApniDisha | AI-Powered Educational Animations',
     description: 'Transform your ideas into stunning educational animations powered by AI',
     type: 'website',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ManimGen',
+    title: 'ApniDisha',
     description: 'AI-Powered Educational Animations',
   },
 };

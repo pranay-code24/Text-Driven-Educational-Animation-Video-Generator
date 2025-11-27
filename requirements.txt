@@ -112,7 +112,7 @@ torchvision>=0.22.0
 transformers>=4.33.0,<4.40.0
 timm>=1.0.15
 safetensors>=0.5.3
-tokenizers>=0.21.1
+tokenizers<=0.18.1
 # sentencepiece>=0.2.0  # Commented out due to CMake build issues on Windows
 onnxruntime>=1.22.0
 
@@ -147,7 +147,7 @@ watchfiles>=1.0.5
 watchdog>=5.0.3
 
 # Interactive tools
-ipython>=9.3.0
+ipython>=8.12.0
 ipython_pygments_lexers>=1.1.1
 jedi>=0.19.2
 matplotlib-inline>=0.1.7

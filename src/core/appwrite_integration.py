@@ -142,11 +142,12 @@ class AppwriteVideoManager:
     async def _create_videos_collection(self):
         """Create videos collection with proper attributes."""
         try:
-            # Create videos collection
+            # Create videos collection with read permissions for clients
             self.databases.create_collection(
                 database_id=self.database_id,
                 collection_id=self.videos_collection_id,
-                name="Videos"
+                name="Videos",
+                permissions=["read(\"any\")", "write(\"users\")", "create(\"users\")", "update(\"users\")", "delete(\"users\")"]
             )
             
             # Add string attributes
@@ -250,11 +251,12 @@ class AppwriteVideoManager:
     async def _create_scenes_collection(self):
         """Create scenes collection with proper attributes."""
         try:
-            # Create scenes collection
+            # Create scenes collection with read permissions for clients
             self.databases.create_collection(
                 database_id=self.database_id,
                 collection_id=self.scenes_collection_id,
-                name="Scenes"
+                name="Scenes",
+                permissions=["read(\"any\")", "write(\"users\")", "create(\"users\")", "update(\"users\")", "delete(\"users\")"]
             )
             
             # Add string attributes (optimized sizes due to Appwrite limits)

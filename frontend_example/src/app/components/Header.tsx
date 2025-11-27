@@ -43,7 +43,7 @@ export default function Header() {
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl blur-md opacity-40 group-hover:opacity-60 transition-opacity"></div>
                 <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 p-3 rounded-2xl shadow-2xl">
-                  {/* Enhanced ManimGen Logo */}
+                  {/* Enhanced ApniDisha Logo */}
                   <svg className="h-8 w-8 text-white" viewBox="0 0 32 32" fill="none">
                     {/* Mathematical curve/wave */}
                     <path 
@@ -83,7 +83,7 @@ export default function Header() {
                 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent hover:from-blue-300 hover:via-purple-300 hover:to-pink-300 transition-all duration-300"
                 whileHover={{ scale: 1.05 }}
               >
-                ManimGen
+                ApniDisha
               </motion.span>
             </Link>
           </motion.div>

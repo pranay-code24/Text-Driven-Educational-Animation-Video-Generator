@@ -170,8 +170,33 @@ export default function VideoGenerator() {
         try {
             const result = await generateVideo(topic, description);
             if (result.success && result.videoId) {
-                const video = await getVideo(result.videoId);
-                if (video) setCurrentVideo(video);
+                // Retry getting the video document with exponential backoff
+                let video = null;
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (!video && attempts < maxAttempts) {
+                    try {
+                        video = await getVideo(result.videoId);
+                        if (video) break;
+                    } catch (err) {
+                        console.log(`Attempt ${attempts + 1} to get video failed:`, err);
+                    }
+
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        // Wait with exponential backoff: 1s, 2s, 4s, 8s
+                        const delay = Math.pow(2, attempts - 1) * 1000;
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+
+                if (video) {
+                    setCurrentVideo(video);
+                } else {
+                    throw new Error('Failed to retrieve video document after multiple attempts');
+                }
             } else {
                 throw new Error(result.error || 'Failed to start video generation');
             }

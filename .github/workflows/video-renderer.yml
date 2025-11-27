@@ -1,294 +1,226 @@
 name: Video Renderer
-# Updated 2025-01-04: Force rebuild for memvid dependencies
+
 on:
-  # Trigger manually or via webhook
+  # Manual trigger for testing
   workflow_dispatch:
     inputs:
       video_id:
-        description: "Video ID to render"
-        required: true
-        type: string
-
-      topic:
-        description: "Topic (optional)"
+        description: 'Video ID to render'
         required: false
         type: string
 
-      description:
-        description: "Description (optional)"
-        required: false
-        type: string
+  # Scheduled run every 5 minutes to check for queued videos
+  schedule:
+    - cron: '*/5 * * * *'
 
-      subject:
-        description: "Subject (optional)"
-        required: false
-        type: string
-
-      difficulty_level:
-        description: "Difficulty level (optional)"
-        required: false
-        type: string
-  # Also run on a schedule to check for queued videos
-  # schedule:
-  #   - cron: '*/5 * * * *'  # Every 5 minutes
-  
-  # Trigger via repository dispatch (webhook)
+  # Repository dispatch from API server
   repository_dispatch:
     types: [render_video]
 
 jobs:
   render-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # Increased timeout to 2 hours to handle video generation
-    
-    # Use custom Docker container with pre-installed dependencies  
-    container:
-      image: ghcr.io/manojinaik/manimanimationagent/manim-animation-agent:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root --shm-size=2g  # Added shared memory for video processing
-    
+    timeout-minutes: 30
+
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
-      
-    # Clean up disk space to prevent space issues  
-    - name: Free up disk space
-      shell: bash
-      run: |
-        apt-get clean
-        rm -rf /var/lib/apt/lists/*
-        rm -rf /tmp/*
-        rm -rf /var/tmp/*
-        df -h  # Show available disk space
-      
-    # Dependencies are pre-installed in Docker image - no pip install needed!
-    # This eliminates 2-5 minutes of dependency installation time per run
-    
-    # Verify pre-installed dependencies
-    - name: Verify pre-installed dependencies
-      shell: bash
-      run: |
-        # Ensure Python path is set correctly
-        export PYTHONPATH="$PWD:$PYTHONPATH"
-        echo "PYTHONPATH=$PWD:$PYTHONPATH" >> $GITHUB_ENV
-        
-        # Verify critical packages are already installed (from Docker image)
-        echo "🔍 Verifying pre-installed dependencies..."
-        python -c "import appwrite; print('✅ Appwrite SDK already installed')"
-        python -c "import manim; print('✅ Manim already installed')"
-        python -c "import numpy, scipy; print('✅ Scientific libraries already installed')"
-        python -c "import openai, google.generativeai; print('✅ AI libraries already installed')"
-        echo "✅ All dependencies verified - ready to render!"
-        
-    # Validate that all required environment variables are present before starting
-    - name: Validate environment variables
-      env:
-        APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-        APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-        APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
-        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        ELEVENLABS_VOICE: "true"  # Enable ElevenLabs voice generation
-        # AI Model Configuration - Centralized in GitHub Actions
-        DEFAULT_PLANNER_MODEL: "gemini-2.5-flash"
-        DEFAULT_SCENE_MODEL: "gemini-2.5-flash-lite-preview-06-17" 
-        DEFAULT_HELPER_MODEL: "gemini-2.5-flash-lite-preview-06-17"
-        DEFAULT_EVALUATION_TEXT_MODEL: "azure/gpt-4o"
-        DEFAULT_EVALUATION_VIDEO_MODEL: "gemini-2.5-flash"
-        DEFAULT_EVALUATION_IMAGE_MODEL: "azure/gpt-4o"
-        DEFAULT_MODEL_TEMPERATURE: "0.7"
-        DEFAULT_MAX_RETRIES: "15"
-        DEFAULT_MAX_SCENE_CONCURRENCY: "4"
-        # Feature toggles (centralized)
-        USE_RAG: "${{ vars.USE_RAG || 'true' }}"
-        USE_CONTEXT_LEARNING: "${{ vars.USE_CONTEXT_LEARNING || 'true' }}"
-        USE_VISUAL_FIX_CODE: "${{ vars.USE_VISUAL_FIX_CODE || 'false' }}"
-        USE_MEMVID: "${{ vars.USE_MEMVID || 'true' }}"  # Enable Memvid video-based RAG by default
-        MODEL_VERBOSE: "${{ vars.MODEL_VERBOSE || 'true' }}"
-        MODEL_PRINT_COST: "${{ vars.MODEL_PRINT_COST || 'true' }}"
-        USE_LANGFUSE: "${{ vars.USE_LANGFUSE || 'false' }}"
-      shell: bash  # Use bash for indirect variable expansion
-      run: |
-        echo "Validating required environment variables..."
-        
-        # Function to check if variable is set and not empty
-        check_var() {
-          if [ -z "${!1}" ]; then
-            echo "❌ ERROR: $1 is not set or empty"
-            return 1
-          else
-            echo "✅ $1 is set"
-            return 0
-          fi
-        }
-        
-        # Check all required variables
-        check_var "APPWRITE_ENDPOINT" || exit 1
-        check_var "APPWRITE_PROJECT_ID" || exit 1
-        check_var "APPWRITE_API_KEY" || exit 1
-        check_var "GEMINI_API_KEY" || exit 1
-        
-        # Optional variables (don't fail if missing)
-        check_var "OPENAI_API_KEY" || echo "⚠️ OPENAI_API_KEY not set (optional)"
-        check_var "MEM0_API_KEY" || echo "⚠️ MEM0_API_KEY not set (optional)"
-        check_var "TAVILY_API_KEY" || echo "⚠️ TAVILY_API_KEY not set (optional)"
-        check_var "ELEVENLABS_API_KEY" || echo "⚠️ ELEVENLABS_API_KEY not set (optional)"
-        
-        # Validate model configuration
-        echo "✅ Model configuration:"
-        echo "  DEFAULT_PLANNER_MODEL: $DEFAULT_PLANNER_MODEL"
-        echo "  DEFAULT_SCENE_MODEL: $DEFAULT_SCENE_MODEL"
-        echo "  DEFAULT_HELPER_MODEL: $DEFAULT_HELPER_MODEL"
-        echo "  DEFAULT_MODEL_TEMPERATURE: $DEFAULT_MODEL_TEMPERATURE"
-        echo "  DEFAULT_MAX_RETRIES: $DEFAULT_MAX_RETRIES"
-        
-        echo "✅ Environment validation complete"
-        
-    - name: Set up environment variables
-      env:
-        APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-        APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-        APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
-        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        ELEVENLABS_VOICE: "true"  # Enable ElevenLabs voice generation
-        MANIMCE_USE_PROGRESS_BARS: "true"
-        # AI Model Configuration - Centralized in GitHub Actions
-        DEFAULT_PLANNER_MODEL: "gemini-2.5-flash"
-        DEFAULT_SCENE_MODEL: "gemini/gemini-2.5-flash-lite-preview-06-17" 
-        DEFAULT_HELPER_MODEL: "gemini/gemini-2.5-flash-lite-preview-06-17"
-        DEFAULT_EVALUATION_TEXT_MODEL: "azure/gpt-4o"
-        DEFAULT_EVALUATION_VIDEO_MODEL: "gemini-2.5-flash"
-        DEFAULT_EVALUATION_IMAGE_MODEL: "azure/gpt-4o"
-        DEFAULT_MODEL_TEMPERATURE: "0.7"
-        DEFAULT_MAX_RETRIES: "15"
-        DEFAULT_MAX_SCENE_CONCURRENCY: "4"
-        # Feature toggles (centralized – same as above)
-        USE_RAG: "${{ vars.USE_RAG || 'false' }}"
-        USE_CONTEXT_LEARNING: "${{ vars.USE_CONTEXT_LEARNING || 'true' }}"
-        USE_VISUAL_FIX_CODE: "${{ vars.USE_VISUAL_FIX_CODE || 'false' }}"
-        USE_MEMVID: "${{ vars.USE_MEMVID || 'true' }}"
-        MODEL_VERBOSE: "${{ vars.MODEL_VERBOSE || 'true' }}"
-        MODEL_PRINT_COST: "${{ vars.MODEL_PRINT_COST || 'true' }}"
-        USE_LANGFUSE: "${{ vars.USE_LANGFUSE || 'false' }}"
-      shell: bash
-      run: |
-        echo "Environment variables set successfully"
-        echo "Working directory: $(pwd)"
-        echo "Available disk space:"
-        df -h
-        
-        # Create necessary directories with proper permissions
-        mkdir -p output api_outputs media temp_audio
-        chmod 755 output api_outputs media temp_audio
-        
-    - name: Check for queued videos
-      id: check_queue
-      env:
-        APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-        APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-        APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-      shell: bash
-      run: |
-        # Add timeout to prevent hanging
-        timeout 300 python scripts/check_video_queue.py || {
-          echo "❌ Video queue check timed out after 5 minutes"
-          echo "videos_found=false" >> $GITHUB_OUTPUT
-          exit 1
-        }
-        
-    - name: Render videos
-      if: steps.check_queue.outputs.videos_found == 'true' || github.event.inputs.video_id != ''
-      env:
-        APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-        APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-        APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
-        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-        ELEVENLABS_VOICE: "true"  # Enable ElevenLabs voice generation
-        MANIMCE_USE_PROGRESS_BARS: "true"
-        VIDEO_ID: ${{ github.event.inputs.video_id || github.event.client_payload.video_id }}
-        # AI Model Configuration - Centralized in GitHub Actions
-        DEFAULT_PLANNER_MODEL: "gemini/gemini-2.5-flash"
-        DEFAULT_SCENE_MODEL: "gemini/gemini-2.5-flash-lite-preview-06-17" 
-        DEFAULT_HELPER_MODEL: "gemini/gemini-2.5-flash-lite-preview-06-17"
-        DEFAULT_EVALUATION_TEXT_MODEL: "azure/gpt-4o"
-        DEFAULT_EVALUATION_VIDEO_MODEL: "gemini/gemini-2.5-flash"
-        DEFAULT_EVALUATION_IMAGE_MODEL: "azure/gpt-4o"
-        DEFAULT_MODEL_TEMPERATURE: "0.7"
-        DEFAULT_MAX_RETRIES: "15"
-        DEFAULT_MAX_SCENE_CONCURRENCY: "4"
-        # Feature toggles (centralized – same as above)
-        USE_RAG: "${{ vars.USE_RAG || 'false' }}"
-        USE_CONTEXT_LEARNING: "${{ vars.USE_CONTEXT_LEARNING || 'true' }}"
-        USE_VISUAL_FIX_CODE: "${{ vars.USE_VISUAL_FIX_CODE || 'false' }}"
-        USE_MEMVID: "${{ vars.USE_MEMVID || 'true' }}"
-        MODEL_VERBOSE: "${{ vars.MODEL_VERBOSE || 'true' }}"
-        MODEL_PRINT_COST: "${{ vars.MODEL_PRINT_COST || 'true' }}"
-        USE_LANGFUSE: "${{ vars.USE_LANGFUSE || 'false' }}"
-      shell: bash  # Explicitly use bash instead of sh to avoid bashism issues
-      run: |
-        # Set up error handling
-        set -euo pipefail  # Exit on error, undefined variables, pipe failures
-        
-        echo "🎬 Starting video rendering process..."
-        echo "Video ID: ${VIDEO_ID:-'Not specified - will process queue'}"
-        echo "Timestamp: $(date)"
-        
-        # Monitor disk space during rendering
-        echo "Initial disk space:"
-        df -h
-        
-        # Run the video renderer with timeout
-        timeout 7200 python scripts/github_video_renderer.py || {
-          exit_code=$?
-          if [ $exit_code -eq 124 ]; then
-            echo "❌ Video rendering timed out after 2 hours"
-            exit 1
-          else
-            echo "❌ Video rendering failed with exit code: $exit_code"
-            exit $exit_code
-          fi
-        }
-        
-        echo "✅ Video rendering completed successfully"
-        echo "Final disk space:"
-        df -h
-        
-    # Enhanced error handling and artifact upload
-    - name: Upload artifacts (for debugging)
-      if: always()
-      uses: actions/upload-artifact@v4
       with:
-        name: video-render-logs-${{ github.run_number }}
-        path: |
-          output/
-          *.log
-          **/*.log
-          api_outputs/
-        retention-days: 7
-        if-no-files-found: warn
-        
-    # Clean up after job completion to free space for future runs
-    - name: Cleanup
-      if: always()
-      shell: bash
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install system dependencies
       run: |
-        echo "🧹 Cleaning up workspace..."
-        # Remove large temporary files but keep logs
-        find . -name "*.mp4" -size +100M -delete 2>/dev/null || true
-        find . -name "*.avi" -size +100M -delete 2>/dev/null || true
-        find . -name "temp_*" -type d -exec rm -rf {} + 2>/dev/null || true
-        echo "Cleanup completed"
-        df -h 
+        sudo apt-get update
+        sudo apt-get install -y \
+          ffmpeg \
+          libcairo2-dev \
+          libpango1.0-dev \
+          ffmpeg \
+          texlive-latex-base \
+          texlive-fonts-recommended \
+          texlive-extra-utils \
+          texlive-latex-extra \
+          dvipng
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-github-actions.txt
+
+    - name: Set up environment variables
+      run: |
+        echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+        echo "APPWRITE_API_KEY=${{ secrets.APPWRITE_API_KEY }}" >> $GITHUB_ENV
+        echo "APPWRITE_PROJECT_ID=${{ secrets.APPWRITE_PROJECT_ID }}" >> $GITHUB_ENV
+        echo "APPWRITE_ENDPOINT=${{ secrets.APPWRITE_ENDPOINT }}" >> $GITHUB_ENV
+        echo "GITHUB_REPO_OWNER=${{ github.repository_owner }}" >> $GITHUB_ENV
+        echo "GITHUB_REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+        echo "GH_PAT=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+    - name: Check for videos to render
+      id: check_videos
+      run: |
+        python -c "
+        import os
+        import sys
+        sys.path.append('src')
+
+        from src.core.appwrite_integration import AppwriteVideoManager
+        import asyncio
+
+        async def check_and_render():
+            manager = AppwriteVideoManager()
+            if not manager.enabled:
+                print('Appwrite not configured')
+                return
+
+            # Get videos that need rendering
+            videos = await manager.list_videos(status='queued_for_render')
+            if not videos:
+                print('No videos queued for rendering')
+                return
+
+            # Take the first video
+            video = videos[0]
+            video_id = video['\$id']
+            print(f'Found video to render: {video_id}')
+
+            # Update status to rendering
+            await manager.update_video_status(video_id, 'rendering', 'Starting video rendering...')
+
+            # Set output for next step
+            print(f'::set-output name=video_id::{video_id}')
+            print(f'::set-output name=topic::{video.get(\"topic\", \"Unknown\")}')
+
+        asyncio.run(check_and_render())
+        "
+      continue-on-error: true
+
+    - name: Render video
+      if: steps.check_videos.outputs.video_id != ''
+      run: |
+        VIDEO_ID='${{ steps.check_videos.outputs.video_id }}'
+        TOPIC='${{ steps.check_videos.outputs.topic }}'
+
+        echo "Rendering video: $VIDEO_ID - $TOPIC"
+
+        python -c "
+        import os
+        import sys
+        sys.path.append('src')
+
+        from src.core.appwrite_integration import AppwriteVideoManager
+        from generate_video import VideoGenerator
+        from mllm_tools.litellm import LiteLLMWrapper
+        from src.config.config import Config
+        import asyncio
+
+        async def render_video():
+            video_id = os.environ.get('VIDEO_ID')
+            if not video_id:
+                print('No video ID provided')
+                return
+
+            print(f'Starting render for video: {video_id}')
+
+            # Initialize Appwrite manager
+            manager = AppwriteVideoManager()
+            if not manager.enabled:
+                print('Appwrite not configured')
+                return
+
+            # Get video details
+            video = await manager.get_video_record(video_id)
+            if not video:
+                print(f'Video {video_id} not found')
+                return
+
+            topic = video.get('topic', 'Unknown Topic')
+            description = video.get('description', '')
+            scene_count = video.get('scene_count', 3)
+
+            print(f'Rendering: {topic} ({scene_count} scenes)')
+
+            try:
+                # Initialize video generator
+                planner_model = LiteLLMWrapper(
+                    model_name=Config.DEFAULT_PLANNER_MODEL,
+                    temperature=Config.DEFAULT_MODEL_TEMPERATURE,
+                    print_cost=Config.MODEL_PRINT_COST,
+                    verbose=Config.MODEL_VERBOSE,
+                    use_langfuse=Config.USE_LANGFUSE
+                )
+
+                generator = VideoGenerator(
+                    planner_model=planner_model,
+                    helper_model=planner_model,
+                    scene_model=planner_model,
+                    output_dir='output',
+                    verbose=True
+                )
+
+                # Generate video
+                result = await generator.generate_video_pipeline(
+                    topic=topic,
+                    description=description,
+                    max_retries=2,
+                    only_plan=False,
+                    specific_scenes=list(range(1, scene_count + 1))
+                )
+
+                if result and result.get('success'):
+                    # Upload final video
+                    video_file = result.get('combined_video_path')
+                    if video_file and os.path.exists(video_file):
+                        file_id = await manager.upload_video_file(video_file, video_id)
+                        if file_id:
+                            video_url = manager._get_file_url(manager.final_videos_bucket_id, file_id)
+                            await manager.update_video_status(
+                                video_id,
+                                'completed',
+                                combined_video_url=video_url
+                            )
+                            print(f'✅ Video completed: {video_url}')
+                        else:
+                            await manager.update_video_status(
+                                video_id,
+                                'failed',
+                                'Failed to upload video file'
+                            )
+                    else:
+                        await manager.update_video_status(
+                            video_id,
+                            'failed',
+                            'Video file not generated'
+                        )
+                else:
+                    error_msg = result.get('error', 'Unknown error during generation') if result else 'Generation failed'
+                    await manager.update_video_status(video_id, 'failed', error_msg)
+                    print(f'❌ Video generation failed: {error_msg}')
+
+            except Exception as e:
+                error_msg = f'Render error: {str(e)}'
+                await manager.update_video_status(video_id, 'failed', error_msg)
+                print(f'❌ Exception during render: {error_msg}')
+
+        asyncio.run(render_video())
+        "
+      env:
+        VIDEO_ID: ${{ steps.check_videos.outputs.video_id }}
+        TOPIC: ${{ steps.check_videos.outputs.topic }}
+
+    - name: Upload render logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: render-logs-${{ steps.check_videos.outputs.video_id || 'no-video' }}
+        path: |
+          *.log
+          output/
+        retention-days: 7

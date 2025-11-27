@@ -159,14 +159,36 @@ export async function getTaskStatus(taskId: string): Promise<{
 // Get video document
 export async function getVideo(videoId: string): Promise<VideoDocument | null> {
     try {
+        console.log('🔍 Attempting to get video document:', {
+            videoId,
+            database: DATABASE_ID,
+            collection: VIDEOS_COLLECTION_ID,
+            endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+            projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID
+        });
+
         const response = await databases.getDocument(
             DATABASE_ID,
             VIDEOS_COLLECTION_ID,
             videoId
         );
+
+        console.log('✅ Successfully retrieved video document:', {
+            id: (response as any).$id,
+            topic: (response as any).topic,
+            status: (response as any).status
+        });
+
         return response as unknown as VideoDocument;
     } catch (error) {
-        console.error('Failed to get video:', error);
+        console.error('❌ Failed to get video document:', {
+            videoId,
+            database: DATABASE_ID,
+            collection: VIDEOS_COLLECTION_ID,
+            error: error instanceof Error ? error.message : error,
+            errorName: error instanceof Error ? error.name : 'Unknown',
+            errorStack: error instanceof Error ? error.stack : 'No stack'
+        });
         return null;
     }
 }

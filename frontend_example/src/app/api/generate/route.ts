@@ -87,11 +87,18 @@ const VIDEOS_COLLECTION_ID = 'videos';
 
 export async function POST(request: NextRequest) {
   console.log('📥 API /generate POST request received at:', new Date().toISOString());
-  
+  console.log('🔧 Server environment check:', {
+    endpoint: process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT,
+    projectId: process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID,
+    hasApiKey: !!process.env.APPWRITE_API_KEY,
+    database: DATABASE_ID,
+    collection: VIDEOS_COLLECTION_ID
+  });
+
   // Check required environment variables
   const requiredEnvVars = ['GITHUB_REPO_OWNER', 'GITHUB_REPO_NAME', 'GH_PAT'];
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-  
+
   if (missingVars.length > 0) {
     console.error('Missing environment variables:', missingVars);
   }
@@ -124,17 +131,34 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    // Trigger GitHub Actions workflow *synchronously* so the serverless function
-    // doesn't exit before the request completes, which caused intermittent
-    // failures in production. We still swallow errors so the client receives a
-    // successful response as long as the DB document was created.
+    console.log('✅ Video document created successfully:', {
+      id: (videoDocument as any).$id,
+      topic: (videoDocument as any).topic,
+      status: (videoDocument as any).status,
+      database: DATABASE_ID,
+      collection: VIDEOS_COLLECTION_ID
+    });
+
+    // Verify the document was created by trying to read it back
     try {
-      await triggerGithubWorkflow((videoDocument as any).$id);
-    } catch (err) {
-      console.error('❌ GitHub workflow trigger ultimately failed after all retries:', err);
-      // Proceed without throwing – we don't want to block the response if the
-      // GitHub API is temporarily unavailable.
+      const verifyDoc = await databases.getDocument(
+        DATABASE_ID,
+        VIDEOS_COLLECTION_ID,
+        (videoDocument as any).$id
+      );
+      console.log('✅ Document verification successful:', {
+        id: (verifyDoc as any).$id,
+        topic: (verifyDoc as any).topic,
+        status: (verifyDoc as any).status
+      });
+    } catch (verifyError) {
+      console.error('❌ Document verification failed:', verifyError);
     }
+
+    // For now, skip GitHub workflow trigger and let the backend process the video directly
+    // The video is already marked as 'queued_for_render' so the backend can pick it up
+    console.log('📋 Video queued for rendering - backend will process it automatically');
+    console.log('🎬 Video ID:', (videoDocument as any).$id);
 
     return NextResponse.json({
       success: true,

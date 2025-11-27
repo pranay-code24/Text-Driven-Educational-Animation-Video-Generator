@@ -113,8 +113,8 @@ export default function Home() {
             transition={{ duration: 2, delay: 0.6, ease: "easeOut" }}
             className="relative mb-8"
           >
-            <h1 className="hero-title" data-text="ManimGen">
-              ManimGen
+            <h1 className="hero-title" data-text="ApniDisha">
+              ApniDisha
             </h1>
           </motion.div>
 

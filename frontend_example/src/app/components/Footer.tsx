@@ -33,7 +33,7 @@ export default function Footer() {
                   </svg>
                 </div>
               </div>
-              <span className="text-xl font-bold text-gradient">ManimGen</span>
+              <span className="text-xl font-bold text-gradient">ApniDisha</span>
             </Link>
             <p className="mt-4 text-sm text-gray-400 max-w-xs">
               The world's most advanced platform for AI-powered educational animations.
@@ -93,7 +93,7 @@ export default function Footer() {
         <div className="mt-12 pt-8 border-t border-gray-800/30">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-sm text-gray-400">
-              © {new Date().getFullYear()} ManimGen. All rights reserved.
+              © {new Date().getFullYear()} ApniDisha. All rights reserved.
             </div>
             <div className="mt-4 md:mt-0 flex items-center space-x-4 text-sm text-gray-400">
               <span>Made with</span>
