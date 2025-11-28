@@ -22,6 +22,10 @@ class Config:
     _visual_fix_flag = os.getenv("USE_VISUAL_FIX_CODE", "false").lower()
     USE_VISUAL_FIX_CODE = _visual_fix_flag in ["true", "1", "yes", "on", "enabled"]
     
+    # Memvid toggle - disabled by default to prevent segfaults
+    _memvid_flag = os.getenv("USE_MEMVID", "false").lower()
+    USE_MEMVID = _memvid_flag in ["true", "1", "yes", "on", "enabled"]
+    
     # AI Model configurations - configurable from environment variables
     DEFAULT_PLANNER_MODEL = os.getenv('DEFAULT_PLANNER_MODEL', 'gemini/gemini-2.5-pro')
     DEFAULT_SCENE_MODEL = os.getenv('DEFAULT_SCENE_MODEL', 'gemini/gemini-2.5-pro')

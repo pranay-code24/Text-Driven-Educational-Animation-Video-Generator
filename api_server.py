@@ -108,6 +108,18 @@ def setup_environment():
     """Setup environment for API server."""
     logger.info("🚀 Setting up manimAnimationAgent API Server...")
     
+    # Workaround for PyTorch/OpenMP segmentation faults on ARM Mac
+    # Limit OpenMP threads to prevent threading conflicts
+    if os.getenv("OMP_NUM_THREADS") is None:
+        os.environ["OMP_NUM_THREADS"] = "1"
+        logger.info("🔧 Set OMP_NUM_THREADS=1 to prevent OpenMP threading conflicts")
+    
+    # Additional PyTorch threading workarounds
+    if os.getenv("MKL_NUM_THREADS") is None:
+        os.environ["MKL_NUM_THREADS"] = "1"
+    if os.getenv("NUMEXPR_NUM_THREADS") is None:
+        os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    
     # Create output directory
     os.makedirs(API_OUTPUT_DIR, exist_ok=True)
     
@@ -404,6 +416,61 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+async def background_video_worker():
+    """Background task that processes queued videos from Appwrite"""
+    # Wait a bit for the server to fully start
+    logger.info("⏳ Waiting 10 seconds before starting video worker...")
+    await asyncio.sleep(10)
+    
+    try:
+        # Lazy import to avoid loading PyTorch/RAG dependencies at startup
+        # This prevents segmentation faults from OpenMP threading conflicts
+        logger.info("🔄 Loading video worker (lazy import)...")
+        from scripts.video_worker import VideoWorker
+        
+        logger.info("🔄 Initializing video worker...")
+        worker = VideoWorker()
+        logger.info("✅ Background video worker initialized successfully")
+        
+        # Process queue immediately on startup, then every 30 seconds
+        logger.info("🔄 Processing initial video queue...")
+        try:
+            await worker.process_queue(max_videos=5)
+        except Exception as e:
+            logger.error(f"Error in initial queue processing: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        logger.info("✅ Video worker is now running. Will poll every 30 seconds.")
+        
+        # Process queue every 30 seconds
+        cycle_count = 0
+        while True:
+            cycle_count += 1
+            try:
+                logger.info(f"🔄 Worker cycle #{cycle_count}: Checking for queued videos...")
+                processed = await worker.process_queue(max_videos=5)
+                if processed > 0:
+                    logger.info(f"✅ Processed {processed} video(s) in this cycle")
+                else:
+                    logger.debug("No videos to process in this cycle")
+            except Exception as e:
+                logger.error(f"Error in background worker cycle #{cycle_count}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # Continue running even if one cycle fails
+            
+            await asyncio.sleep(30)  # Poll every 30 seconds
+    except ImportError as e:
+        logger.error(f"Failed to import video worker: {e}")
+        logger.error("This may be due to missing dependencies or PyTorch/OpenMP conflicts")
+        logger.error("Videos will remain queued until worker can be started")
+    except Exception as e:
+        logger.error(f"Failed to start background video worker: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.error("Videos will remain queued until worker can be started")
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the system on startup."""
@@ -413,6 +480,19 @@ async def startup_event():
     # init_status = initialize_video_generator()
     # logger.info(f"Initialization status: {init_status}")
     logger.info("Video generator initialization skipped - server starting in minimal mode")
+    
+    # Start background video worker (can be disabled via env var to avoid PyTorch/OpenMP conflicts)
+    enable_worker = os.getenv("ENABLE_VIDEO_WORKER", "true").lower() in ["true", "1", "yes", "on"]
+    if enable_worker:
+        try:
+            asyncio.create_task(background_video_worker())
+            logger.info("✅ Background video worker task created")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to start background worker: {e}")
+            logger.warning("Server will continue running, but video processing may be unavailable")
+    else:
+        logger.info("⚠️ Video worker disabled via ENABLE_VIDEO_WORKER environment variable")
+        logger.info("Set ENABLE_VIDEO_WORKER=true to enable background video processing")
 
 @app.get("/", response_model=Dict[str, str])
 async def root():
@@ -519,6 +599,62 @@ async def health_check():
         dependencies_available=CAN_IMPORT_DEPENDENCIES,
         timestamp=datetime.now().isoformat()
     )
+
+@app.get("/api/worker/status")
+async def worker_status():
+    """Check video worker status and queued videos"""
+    try:
+        from scripts.video_worker import VideoWorker
+        
+        worker = VideoWorker()
+        videos = await worker.get_queued_videos(limit=10)
+        
+        return {
+            "success": True,
+            "worker_enabled": True,
+            "queued_videos": len(videos),
+            "videos": [
+                {
+                    "id": v.get("$id"),
+                    "topic": v.get("topic"),
+                    "status": v.get("status"),
+                    "created_at": v.get("$createdAt")
+                }
+                for v in videos
+            ]
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "worker_enabled": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "queued_videos": 0,
+            "videos": []
+        }
+
+@app.post("/api/worker/process")
+async def trigger_worker():
+    """Manually trigger video worker to process queued videos"""
+    try:
+        from scripts.video_worker import VideoWorker
+        
+        worker = VideoWorker()
+        processed = await worker.process_queue(max_videos=5)
+        
+        return {
+            "success": True,
+            "processed": processed,
+            "message": f"Processed {processed} video(s)"
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 @app.get("/api/stats")
 async def get_stats():

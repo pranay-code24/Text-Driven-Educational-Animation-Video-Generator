@@ -996,7 +996,7 @@ class AppwriteVideoManager:
         while True:
             try:
                 file_id = file_id or ID.unique()
-                permissions = permissions or ["read(\"any\")"]
+                permissions = permissions or ["read(\"any\")", "write(\"users\")"]
 
                 result = self.storage.create_file(
                     bucket_id=bucket_id,

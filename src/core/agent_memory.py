@@ -52,8 +52,14 @@ class AgentMemory:
             self.client = MemoryClient(api_key=api_key)
             print(f"Agent memory initialized for agent: {self.agent_id}")
         except Exception as e:
-            print(f"Failed to initialize Mem0 client: {e}")
+            # Don't crash on Mem0 initialization failure - it's optional
+            error_msg = str(e)
+            if "Invalid API key" in error_msg or "invalid" in error_msg.lower():
+                print(f"⚠️ Mem0 API key invalid or missing. Agent memory disabled.")
+            else:
+                print(f"⚠️ Failed to initialize Mem0 client: {e}")
             self.enabled = False
+            self.client = None
 
     def _create_error_hash(self, error_message: str, code_context: str) -> str:
         """Create a hash for similar error patterns."""

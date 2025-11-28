@@ -139,8 +139,8 @@ class VideoGenerator:
 
         # Resolve memvid configuration from environment variable or parameter
         if use_memvid is None:
-            # Read from environment variable, default to True
-            self.use_memvid = os.getenv('USE_MEMVID', 'true').lower() in ('true', '1', 'yes', 'on')
+            # Read from environment variable, default to False to prevent segfaults
+            self.use_memvid = os.getenv('USE_MEMVID', 'false').lower() in ('true', '1', 'yes', 'on')
         else:
             self.use_memvid = use_memvid
             
@@ -766,16 +766,30 @@ class VideoGenerator:
         # Initialize database record for this video
         video_id = None
         scene_ids = []  # Initialize scene_ids at the beginning
-        try:
-            # Get initial scene count estimate (will be updated after planning)
-            estimated_scene_count = 4  # Default estimate
-            video_id = await self.create_video_record(topic, description, estimated_scene_count, session_id)
-            if video_id:
-                await self.update_video_status(video_id, "planning")
-        except Exception as e:
+        
+        # Check if an existing video_id was provided (e.g., from worker processing queued videos)
+        if hasattr(self, 'existing_video_id') and self.existing_video_id:
+            video_id = self.existing_video_id
             if self.verbose:
-                print(f"⚠️ Database initialization failed: {e}")
-            video_id = None
+                print(f"📝 Using existing video record: {video_id}")
+            # Update status to planning if not already set
+            try:
+                await self.update_video_status(video_id, "planning")
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️ Failed to update existing video status: {e}")
+        else:
+            # Create new video record
+            try:
+                # Get initial scene count estimate (will be updated after planning)
+                estimated_scene_count = 4  # Default estimate
+                video_id = await self.create_video_record(topic, description, estimated_scene_count, session_id)
+                if video_id:
+                    await self.update_video_status(video_id, "planning")
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️ Database initialization failed: {e}")
+                video_id = None
         
         # Load or generate scene outline
         scene_outline_path = os.path.join(self.output_dir, file_prefix, f"{file_prefix}_scene_outline.txt")

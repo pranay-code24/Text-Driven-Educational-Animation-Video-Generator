@@ -196,14 +196,22 @@ export async function getVideo(videoId: string): Promise<VideoDocument | null> {
 // Get video scenes
 export async function getVideoScenes(videoId: string): Promise<SceneDocument[]> {
     try {
+        console.log('🔍 Fetching scenes for video:', videoId);
         const response = await databases.listDocuments(
             DATABASE_ID,
             SCENES_COLLECTION_ID,
-            [`video_id="${videoId}"`]
+            [Query.equal('video_id', videoId)]
         );
+        console.log('✅ Successfully fetched scenes:', response.documents.length);
         return response.documents as unknown as SceneDocument[];
     } catch (error) {
-        console.error('Failed to get video scenes:', error);
+        console.error('❌ Failed to get video scenes:', error);
+        console.error('Error details:', {
+            videoId,
+            database: DATABASE_ID,
+            collection: SCENES_COLLECTION_ID,
+            error: error instanceof Error ? error.message : error
+        });
         return [];
     }
 }
